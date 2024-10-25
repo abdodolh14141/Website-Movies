@@ -1,20 +1,27 @@
 import NextAuth, { NextAuthOptions } from "next-auth";
 import GoogleProvider from "next-auth/providers/google";
+import CredentialsProvider from "next-auth/providers/credentials";
 import { Connect } from "@/dbConfig/dbConfig";
 import User from "../../../models/userModel";
 import bcrypt from "bcrypt";
-import Credentials from "next-auth/providers/credentials";
 
-interface Credentials {
+// Define the UserCredentials interface for the credentials provider
+interface UserCredentials {
   email: string;
   password: string;
 }
 
+// Define the AuthOptions for NextAuth
 const authOptions: NextAuthOptions = {
+  jwt: {
+    maxAge: 1 * 60 * 60, // JWT token expiry (1 hour)
+  },
   session: {
     strategy: "jwt",
+    maxAge: 1 * 60 * 60, // Session expiry (1 hour)
   },
   providers: [
+    // Google OAuth provider
     GoogleProvider({
       clientId: process.env.GOOGLE_CLIENT_ID as string,
       clientSecret: process.env.GOOGLE_SECRET as string,
@@ -26,81 +33,76 @@ const authOptions: NextAuthOptions = {
         },
       },
     }),
-    Credentials({
+    // Credentials provider (email/password login)
+    CredentialsProvider({
       name: "Credentials",
       credentials: {
-        email: {
-          label: "Email",
-          type: "email",
-          placeholder: "example@example.com",
-        },
-        password: {
-          label: "Password", // Fixed typo here from "eassword"
-          type: "password",
-        },
+        email: { label: "Email", type: "email" },
+        password: { label: "Password", type: "password" },
       },
-      async authorize(credentials: Credentials | undefined) {
+      async authorize(credentials: UserCredentials | undefined) {
         if (!credentials) {
-          throw new Error("Credentials not provided");
+          throw new Error("Missing credentials");
         }
 
         const { email, password } = credentials;
 
-        // Connect to the database
-        await Connect();
+        try {
+          // Connect to the database
+          await Connect();
 
-        // Find user by email
-        const user = await User.findOne({ Email: email });
+          // Find the user by email
+          const user = await User.findOne({ Email: email });
 
-        if (!user) {
-          throw new Error("No user found with the provided email");
+          if (!user) {
+            throw new Error("No user found with the provided email");
+          }
+
+          // Check if the password is valid
+          const isPasswordValid = await bcrypt.compare(password, user.Password);
+          if (!isPasswordValid) {
+            throw new Error("Incorrect password");
+          }
+
+          // Return the user object if successful
+          return {
+            id: user._id.toString(),
+            email: user.Email,
+            name: user.UserName,
+          };
+        } catch (error) {
+          console.error("Authorization error:", error);
+          throw new Error("Failed to authorize user");
         }
-
-        // Check if password is valid
-        const isPasswordValid = await bcrypt.compare(password, user.password);
-
-        if (!isPasswordValid) {
-          throw new Error("Incorrect password");
-        }
-
-        // Return user object (id, email, and name) to be used in session
-        return {
-          id: user._id.toString(),
-          email: user.Email,
-          name: user.UserName,
-        };
       },
     }),
   ],
-  secret: process.env.NEXTAUTH_SECRET,
+  secret: process.env.NEXTAUTH_SECRET, // Ensure this secret is configured in .env
+
   callbacks: {
-    // Handle sign in via Google provider
-    async signIn({ profile }) {
-      try {
+    // Sign-in callback for Google or other providers
+    async signIn({ profile, account }) {
+      if (account?.provider === "google" && profile) {
         await Connect();
 
         // Check if the user already exists in the database
-        const checkExists = await User.findOne({
-          Email: profile?.email,
-        });
+        const existingUser = await User.findOne({ Email: profile.email });
 
-        // If not, create a new user
-        if (!checkExists) {
+        // Create a new user if they don't exist
+        if (!existingUser) {
           await User.create({
-            Email: profile?.email,
-            UserName: profile?.name?.toLowerCase(),
-            Image: profile?.image,
+            Email: profile.email?.toLowerCase(),
+            UserName: profile.name?.toLowerCase(),
           });
         }
 
-        return true;
-      } catch (error) {
-        console.log("Error during Google sign-in:", error);
-        return false;
+        return true; // Allow sign-in
       }
+
+      return true; // Other providers can be handled here
     },
 
-    // JWT callback to store user details in token
+    // JWT callback: store additional user data in the token
     async jwt({ token, user }) {
       if (user) {
         token.id = user.id;
@@ -110,8 +112,8 @@ const authOptions: NextAuthOptions = {
       return token;
     },
 
-    // Session callback to store user details in session
-    async session({ token, session }) {
+    // Session callback: pass token data into the session object
+    async session({ session, token }) {
       if (token) {
         session.user = {
           id: token.id,
@@ -122,13 +124,13 @@ const authOptions: NextAuthOptions = {
       return session;
     },
   },
-  // Custom pages for sign-in, sign-out, etc.
+
+  // Custom sign-in page
   pages: {
-    signIn: "/login",
+    signIn: "/login", // Redirect to custom login page
   },
 };
 
-// Export NextAuth handler as GET and POST handlers
 const handler = NextAuth(authOptions);
 
 export { handler as GET, handler as POST, authOptions };

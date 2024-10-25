@@ -4,14 +4,20 @@ import React, { useState } from "react";
 import { toast, Toaster } from "sonner";
 import { useRouter } from "next/navigation";
 import axios from "axios";
-import { GoogleLogin } from "@react-oauth/google";
 import { signIn } from "next-auth/react";
 
+interface UserLogin {
+  name: string;
+  email: string;
+  age: number;
+  password: string;
+}
+
 export default function SignIn() {
-  const [user, setUser] = useState({
+  const [user, setUser] = useState<UserLogin>({
     name: "",
     email: "",
-    age: "",
+    age: 0,
     password: "",
   });
 
@@ -30,8 +36,8 @@ export default function SignIn() {
         password,
       });
 
-      if (res.status === 201) {
-        toast.success("Successfully signed up!");
+      if (res.status === 200) {
+        toast.success(res.data.message);
         router.push("/login");
       } else {
         toast.error(res.data.message || "Sign-up failed. Please try again.");
@@ -58,21 +64,23 @@ export default function SignIn() {
       const { credential } = response;
 
       // Sign in using NextAuth's Google provider
-      const result = signIn("google", {
-        callbackUrl: "/movies",
+      const result = await signIn("google", {
+        callbackUrl: "/restPassword",
         redirect: false, // We want to handle redirection manually
       });
 
-      // Call your backend API to register the user in the database
-      const resDatabase = await axios.post("/api/user/googleSignIn", {
-        credential,
-      });
+      if (result?.ok) {
+        // Call your backend API to register the user in the database
+        const resDatabase = await axios.post("/api/user/googleSignIn", {
+          credential,
+        });
 
-      if (resDatabase.status === 200) {
-        toast.success("Successfully signed in with Google!");
-        router.push(result?.url || "/movies");
-      } else {
-        toast.error("Error registering user. Please try again.");
+        if (resDatabase.status === 200) {
+          toast.success("Successfully signed in with Google!");
+          router.push(result?.url || "/movies");
+        } else {
+          toast.error("Error registering user. Please try again.");
+        }
       }
     } catch (error) {
       console.error("Error during Google Sign-In:", error);
@@ -168,10 +176,10 @@ export default function SignIn() {
           </button>
         </form>
         <div className="mt-6 text-center">
-          <div className="w-full py-2 px-4 bg-blue-600 text-white font-semibold rounded-md shadow-lg hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-opacity-50 transition-all duration-300">
+          <div className="w-full py-2 px- text-white font-semibold rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-opacity-50 transition-all duration-300">
             <button
               onClick={handleGoogleSuccess}
-              className="p-3 cursor-pointer"
+              className="p-3 cursor-pointer hover:scale-125"
             >
               <img
                 src="https://img.icons8.com/?size=100&id=EgRndDDLh8kS&format=png&color=000000"

@@ -2,7 +2,6 @@
 
 import React, { useEffect, useState } from "react";
 import { signIn, getSession } from "next-auth/react";
-import axios from "axios";
 import { toast, Toaster } from "sonner";
 import { useRouter } from "next/navigation";
 
@@ -12,35 +11,11 @@ export default function Login() {
     password: "",
   });
   const [loading, setLoading] = useState(false);
-  const [googleLoading, setGoogleLoading] = useState(false); // For Google Login loading
+  const [googleLoading, setGoogleLoading] = useState(false);
   const router = useRouter();
 
-  const onLogin = async (e: { preventDefault: () => void }) => {
-    e.preventDefault();
-    const { email, password } = user;
-    setLoading(true);
-    try {
-      const res = await signIn("credentials", {
-        redirect: false,
-        email,
-        password,
-      });
-
-      if (res.error) {
-        toast.error("Login failed. Please check your credentials.");
-      } else {
-        toast.success("Successfully logged in!");
-        router.push("/movies");
-      }
-    } catch (error) {
-      console.error("Error during sign in:", error);
-      toast.error("An unexpected error occurred. Please try again.");
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handleChange = (e: { target: { name: any; value: any } }) => {
+  // Handle form input changes
+  const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value } = e.target;
     setUser((prevState) => ({
       ...prevState,
@@ -48,47 +23,66 @@ export default function Login() {
     }));
   };
 
+  // Handle login with credentials
+  const onLogin = async (e: React.FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    setLoading(true);
+
+    try {
+      const res = await signIn("credentials", {
+        redirect: false,
+        email: user.email,
+        password: user.password,
+      });
+
+      if (res?.ok) {
+        toast.success("Successfully logged in!");
+        router.push("/movies");
+      } else {
+        toast.error("Invalid email or password. Please try again.");
+      }
+    } catch (error) {
+      console.error("Error during sign-in:", error);
+      toast.error("An unexpected error occurred. Please try again.");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Check session on component mount
   useEffect(() => {
     const checkSession = async () => {
       try {
         const session = await getSession();
-        if (session) {
-          router.replace("/movies");
-        }
+        if (session) router.replace("/movies");
       } catch (error) {
         console.error("Error checking session:", error);
       }
     };
 
-    checkSession(); // Checking session on component mount
+    checkSession();
   }, [router]);
 
-  const onSuccess = async (response: any) => {
-    setGoogleLoading(true); // Set loading state for Google Login
-    try {
-      // Get the Google token from the response
-      const { credential } = response;
+  // Handle Google sign-in
+  const onGoogleSignIn = async () => {
+    setGoogleLoading(true);
 
-      // Sign in using NextAuth's Google provider
+    try {
       const result = await signIn("google", {
         callbackUrl: "/movies",
-        redirect: false, // We want to handle redirection manually
+        redirect: false,
       });
 
-      // Call your backend API to register the user in the database
-      const resDatabase = await axios.post(
-        "/api/user/googleSignIn",
-        credential
-      );
-
-      if (resDatabase.status === 200 && result?.ok) {
-        toast.success(resDatabase.data.message);
-      } else {
-        toast.error(resDatabase.data.message);
+      if (result?.ok) {
+        toast.success("Successfully logged in with Google!");
+      } else if (result?.error) {
+        toast.error("Google Sign-In failed. Please try again.");
       }
     } catch (error) {
       console.error("Error during Google Sign-In:", error);
       toast.error("Google Sign-In failed. Please try again.");
+    } finally {
+      setGoogleLoading(false);
     }
   };
 
@@ -109,11 +103,11 @@ export default function Login() {
             </label>
             <input
               type="email"
-              onChange={handleChange}
               name="email"
               id="email"
-              placeholder="Enter Your Email"
               value={user.email}
+              onChange={handleChange}
+              placeholder="Enter Your Email"
               className="mt-1 block w-full px-4 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
               required
               aria-label="Email Input"
@@ -128,11 +122,11 @@ export default function Login() {
             </label>
             <input
               type="password"
-              onChange={handleChange}
               name="password"
               id="password"
-              placeholder="Enter Your Password"
               value={user.password}
+              onChange={handleChange}
+              placeholder="Enter Your Password"
               className="mt-1 block w-full px-4 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
               required
               aria-label="Password Input"
@@ -151,19 +145,21 @@ export default function Login() {
         </form>
         <div className="mt-6 text-center">
           {googleLoading ? (
-            <div className="text-sm text-gray-600">
+            <div className="text-sm text-white text-3xl">
               Logging in with Google...
             </div>
           ) : (
-            <div className="w-full py-2 px-4 bg-blue-600 text-white font-semibold rounded-md shadow-lg hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-opacity-50 transition-all duration-300">
-              <button onClick={onSuccess} className="p-3 cursor-pointer">
-                <img
-                  src="https://img.icons8.com/?size=100&id=EgRndDDLh8kS&format=png&color=000000"
-                  alt="image gmail"
-                  width={50}
-                />
-              </button>
-            </div>
+            <button
+              onClick={onGoogleSignIn}
+              className="p-3 cursor-pointer hover:scale-125"
+              aria-label="Google Sign-In"
+            >
+              <img
+                src="https://img.icons8.com/?size=100&id=EgRndDDLh8kS&format=png&color=000000"
+                alt="Google Login Icon"
+                width={50}
+              />
+            </button>
           )}
         </div>
       </div>

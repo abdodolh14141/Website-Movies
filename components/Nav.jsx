@@ -7,7 +7,7 @@ import { useRouter } from "next/navigation";
 
 const Nav = () => {
   const [isLogin, setLogin] = useState(false);
-  const [userName, setUserName] = useState("");
+  const [UserName, setNameUser] = useState("");
   const router = useRouter();
   const { data: session, status } = useSession();
 
@@ -19,10 +19,7 @@ const Nav = () => {
   useEffect(() => {
     if (status === "authenticated") {
       setLogin(true);
-      setUserName(session?.user?.name || "");
-    } else {
-      setLogin(false);
-      setUserName("");
+      setNameUser(session?.user?.name || "");
     }
   }, [status, session]);
 
@@ -42,9 +39,11 @@ const Nav = () => {
       </div>
 
       {isLogin && (
-        <h1 className="text-center m-2 p-1 text-3xl">
-          Welcome {userName.split(" ")[0]}
-        </h1>
+        <div>
+          <h1 className="text-center m-2 p-1 text-3xl">
+            Welcome {UserName.split(" ")[0]}
+          </h1>
+        </div>
       )}
 
       <div className="flex items-center space-x-4">
